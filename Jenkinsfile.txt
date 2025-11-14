@@ -1,9 +1,13 @@
 pipeline {
-    agent any
+    agent {
+        docker {
+            image 'python:3.12'  // official Python image with Python 3 preinstalled
+            args '-u'            // unbuffered output for real-time logs
+        }
+    }
 
     environment {
-        // Add any global environment variables here
-        PYTHON_ENV = 'python3'
+        // You can add any global environment variables here
     }
 
     stages {
@@ -16,9 +20,9 @@ pipeline {
         stage('Setup Python') {
             steps {
                 sh '''
-                    python3 --version
-                    pip3 install --upgrade pip
-                    pip3 install -r requirements.txt || echo "No requirements.txt found"
+                    python --version
+                    pip install --upgrade pip
+                    pip install -r requirements.txt || echo "No requirements.txt found"
                 '''
             }
         }
@@ -27,7 +31,7 @@ pipeline {
             steps {
                 sh '''
                     echo "Running Python unit tests..."
-                    python3 -m unittest discover || exit 1
+                    python -m unittest discover || exit 1
                 '''
             }
         }
@@ -36,27 +40,9 @@ pipeline {
     post {
         success {
             script {
+                // WebEx notification on build success
                 withCredentials([string(credentialsId: 'webex-token', variable: 'WEBEX_TOKEN')]) {
                     sh '''
                         curl -X POST -H "Authorization: Bearer $WEBEX_TOKEN" \
                         -H "Content-Type: application/json" \
                         -d '{"roomId": "<YOUR_WEBEX_ROOM_ID>", "text": "Build SUCCESSFUL!"}' \
-                        https://webexapis.com/v1/messages
-                    '''
-                }
-            }
-        }
-        failure {
-            script {
-                withCredentials([string(credentialsId: 'webex-token', variable: 'WEBEX_TOKEN')]) {
-                    sh '''
-                        curl -X POST -H "Authorization: Bearer $WEBEX_TOKEN" \
-                        -H "Content-Type: application/json" \
-                        -d '{"roomId": "<YOUR_WEBEX_ROOM_ID>", "text": "Build FAILED!"}' \
-                        https://webexapis.com/v1/messages
-                    '''
-                }
-            }
-        }
-    }
-}
