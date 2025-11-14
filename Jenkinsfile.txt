@@ -1,68 +1,29 @@
-pipeline {
-    agent {
-        docker {
-            image 'python:3.12'  // official Python image with Python 3 preinstalled
-            args '-u'            // unbuffered output for real-time logs
-        }
-    }
-
-    environment {
-        // You can add any global environment variables here
-    }
-
-    stages {
-        stage('Checkout SCM') {
-            steps {
-                checkout scm
-            }
-        }
-
-        stage('Setup Python') {
-            steps {
+post {
+    success {
+        script {
+            withCredentials([string(credentialsId: 'webex-token', variable: 'WEBEX_TOKEN')]) {
                 sh '''
-                    python --version
-                    pip install --upgrade pip
-                    pip install -r requirements.txt || echo "No requirements.txt found"
-                '''
-            }
-        }
-
-        stage('Run Tests') {
-            steps {
-                sh '''
-                    echo "Running Python unit tests..."
-                    python -m unittest discover || exit 1
-                '''
-            }
-        }
-    }
-
-    post {
-        success {
-            script {
-                // WebEx notification on build success
-                withCredentials([string(credentialsId: 'webex-token', variable: 'WEBEX_TOKEN')]) {
-                    sh '''
-                        curl -X POST -H "Authorization: Bearer $WEBEX_TOKEN" \
+                    echo "Sending WebEx SUCCESS notification..."
+                    curl -v --fail -X POST \
+                        -H "Authorization: Bearer $WEBEX_TOKEN" \
                         -H "Content-Type: application/json" \
                         -d '{"roomId": "2dae9c10-c114-11f0-9124-93790abe5897", "text": "Build SUCCESSFUL!"}' \
                         https://webexapis.com/v1/messages
-                    '''
-                }
+                '''
             }
         }
-
-        failure {
-            script {
-                // WebEx notification on build failure
-                withCredentials([string(credentialsId: 'webex-token', variable: 'WEBEX_TOKEN')]) {
-                    sh '''
-                        curl -X POST -H "Authorization: Bearer $WEBEX_TOKEN" \
+    }
+    failure {
+        script {
+            withCredentials([string(credentialsId: 'webex-token', variable: 'WEBEX_TOKEN')]) {
+                sh '''
+                    echo "Sending WebEx FAILURE notification..."
+                    curl -v --fail -X POST \
+                        -H "Authorization: Bearer $WEBEX_TOKEN" \
                         -H "Content-Type: application/json" \
                         -d '{"roomId": "2dae9c10-c114-11f0-9124-93790abe5897", "text": "Build FAILED!"}' \
                         https://webexapis.com/v1/messages
-                    '''
-                }
+                '''
             }
         }
     }
