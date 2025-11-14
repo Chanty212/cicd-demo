@@ -1,61 +1,62 @@
 pipeline {
-  agent any
+    agent any
 
-  environment {
-    WEBEX_CRED_ID = 'webex-token'
-  }
-
-  stages {
-    stage('Checkout') {
-      steps {
-        checkout scm
-      }
+    environment {
+        // Add any global environment variables here
+        PYTHON_ENV = 'python3'
     }
 
-    stage('Setup Python') {
-      steps {
-        bat '''
-        python -m venv venv
-        call venv\\Scripts\\activate
-        pip install -r requirements.txt
-        '''
-      }
-    }
-
-    stage('Run Tests') {
-      steps {
-        bat '''
-        call venv\\Scripts\\activate
-        pytest -q
-        '''
-      }
-    }
-  }
-
-  post {
-    success {
-      script {
-        withCredentials([string(credentialsId: env.WEBEX_CRED_ID, variable: 'WEBEX_TOKEN')]) {
-          bat """
-          curl -X POST https://webexapis.com/v1/messages ^
-               -H "Authorization: Bearer %WEBEX_TOKEN%" ^
-               -H "Content-Type: application/json" ^
-               -d "{\\"roomId\\":\\"Y2lzY29zcGFyazovL3VybjpURUFNOnVzLXdlc3QtMl9yL1JPT00vYmJiZDhmZjAtYzA0ZS0xMWYwLTgyNmMtYmIyN2IwZjdiOTM2\\",\\"text\\":\\"✅ Jenkins Build Success for %JOB_NAME% #%BUILD_NUMBER%\\"}"
-          """
+    stages {
+        stage('Checkout SCM') {
+            steps {
+                checkout scm
+            }
         }
-      }
-    }
-    failure {
-      script {
-        withCredentials([string(credentialsId: env.WEBEX_CRED_ID, variable: 'WEBEX_TOKEN')]) {
-          bat """
-          curl -X POST https://webexapis.com/v1/messages ^
-               -H "Authorization: Bearer %WEBEX_TOKEN%" ^
-               -H "Content-Type: application/json" ^
-               -d "{\\"roomId\\":\\"Y2lzY29zcGFyazovL3VybjpURUFNOnVzLXdlc3QtMl9yL1JPT00vYmJiZDhmZjAtYzA0ZS0xMWYwLTgyNmMtYmIyN2IwZjdiOTM2\\",\\"text\\":\\"❌ Jenkins Build FAILED for %JOB_NAME% #%BUILD_NUMBER%\\"}"
-          """
+
+        stage('Setup Python') {
+            steps {
+                sh '''
+                    python3 --version
+                    pip3 install --upgrade pip
+                    pip3 install -r requirements.txt || echo "No requirements.txt found"
+                '''
+            }
         }
-      }
+
+        stage('Run Tests') {
+            steps {
+                sh '''
+                    echo "Running Python unit tests..."
+                    python3 -m unittest discover || exit 1
+                '''
+            }
+        }
     }
-  }
+
+    post {
+        success {
+            script {
+                withCredentials([string(credentialsId: 'webex-token', variable: 'WEBEX_TOKEN')]) {
+                    sh '''
+                        curl -X POST -H "Authorization: Bearer $WEBEX_TOKEN" \
+                        -H "Content-Type: application/json" \
+                        -d '{"roomId": "<YOUR_WEBEX_ROOM_ID>", "text": "Build SUCCESSFUL!"}' \
+                        https://webexapis.com/v1/messages
+                    '''
+                }
+            }
+        }
+        failure {
+            script {
+                withCredentials([string(credentialsId: 'webex-token', variable: 'WEBEX_TOKEN')]) {
+                    sh '''
+                        curl -X POST -H "Authorization: Bearer $WEBEX_TOKEN" \
+                        -H "Content-Type: application/json" \
+                        -d '{"roomId": "<YOUR_WEBEX_ROOM_ID>", "text": "Build FAILED!"}' \
+                        https://webexapis.com/v1/messages
+                    '''
+                }
+            }
+        }
+    }
 }
